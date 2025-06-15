@@ -41,14 +41,14 @@ SWAPSIZE=$((SWAPSIZEGIB * 1024))
 
 MNT=$(mktemp -d)
 
-log Destroying zfs pool rpool and bpool just in case
+log Destroying zfs pool nixos and boot just in case
 swapoff -a
 zpool import -fa
 for i in ${DISK}; do
    zpool labelclear -f $i
 done
-zpool destroy -f bpool
-zpool destroy -f rpool
+zpool destroy -f boot
+zpool destroy -f nixos
 zpool export -a
 
 log Unmounting filesystems just in case
@@ -73,8 +73,8 @@ partition_disk () {
  # parted --script --align=optimal  $disk -- \
  #     mklabel gpt \
  #     mkpart swap  1MiB $((SWAPSIZE + 1))MiB \
- #     mkpart rpool $((SWAPSIZE + 1))MiB -$((RESERVE + 200))MiB \
- #     mkpart bpool -$((RESERVE + 200))MiB -$((RESERVE + 50))MiB \
+ #     mkpart nixos $((SWAPSIZE + 1))MiB -$((RESERVE + 200))MiB \
+ #     mkpart boot -$((RESERVE + 200))MiB -$((RESERVE + 50))MiB \
  #     mkpart EFI -$((RESERVE + 50))MiB -$((RESERVE + 2))MiB \
  #     mkpart BIOS -$((RESERVE + 2))MiB -$((RESERVE + 1))MiB \
  #     set 4 esp on \
@@ -86,8 +86,8 @@ partition_disk () {
      mkpart EFI 1MiB 511MiB \
      mkpart BIOS 511MiB 512MiB \
      mkpart swap 512MiB $((SWAPSIZE + 512))MiB \
-     mkpart rpool $((SWAPSIZE + 512))MiB -$((RESERVE + 150))MiB \
-     mkpart bpool -$((RESERVE + 150))MiB -$((RESERVE + 1))MiB \
+     mkpart nixos $((SWAPSIZE + 512))MiB -$((RESERVE + 150))MiB \
+     mkpart boot -$((RESERVE + 150))MiB -$((RESERVE + 1))MiB \
      set 1 esp on \
      set 2 bios_grub on \
      set 2 legacy_boot on
@@ -106,7 +106,7 @@ log disk $DISK
 log Creating boot pool
 # ---
 # shellcheck disable=SC2046
-createbpool="zpool create \
+createboot="zpool create \
     -o compatibility=grub2 \
     -o ashift=12 \
     -o autotrim=on \
@@ -119,12 +119,12 @@ createbpool="zpool create \
     -O xattr=sa \
     -m /boot \
     -R $MNT \
-    bpool \
+    boot \
     `for i in $DISK; do
        printf '%s ' ${i}p5
      done`"
-echo $createbpool
-eval $createbpool
+echo $createboot
+eval $createboot
 # for i in ${DISK}; do
 #    cryptsetup open --type plain --key-file /dev/random "${i}"p5 "${i##*/}"p5
 #    mkswap /dev/mapper/"${i##*/}"p5
@@ -149,7 +149,7 @@ echo $POOLPASS | zpool create \
     -O encryption=on \
     -O keyformat=passphrase \
     -m / \
-    rpool \
+    nixos \
    $(for i in $DISK; do
       printf '%s ' "${i}p4";
      done)
@@ -157,19 +157,26 @@ echo $POOLPASS | zpool create \
 
 log Creating encrypted root system container
 # ---
-echo $POOLPASS | zfs create \
-    -o canmount=off \
-    -o mountpoint=none \
-    -o encryption=on \
-    -o keylocation=prompt \
-    -o keyformat=passphrase \
-    rpool/nixos
+# echo $POOLPASS | zfs create \
+#     -o canmount=off \
+#     -o mountpoint=none \
+#     -o encryption=on \
+#     -o keylocation=prompt \
+#     -o keyformat=passphrase \
+#     nixos/nixos
+# zfs create \
+#     -o canmount=off \
+#     -o mountpoint=none \
+#     nixos/nixos
+
 
 log Create root system container
-zfs create -o canmount=noauto -o mountpoint=legacy rpool/root
-zfs create -o mountpoint=legacy rpool/home
-mount -o X-mount.mkdir -t zfs rpool/root "${MNT}"
-mount -o X-mount.mkdir -t zfs rpool/home "${MNT}"/home
+zfs create -o canmount=noauto -o mountpoint=legacy nixos/nix/store
+zfs create -o canmount=noauto -o mountpoint=legacy nixos/root
+zfs create -o mountpoint=legacy nixos/home
+mount -o X-mount.mkdir -t zfs nixos/root "${MNT}"
+mount -o X-mount.mkdir -t zfs nixos/nix/store "${MNT}"/nix/store
+mount -o X-mount.mkdir -t zfs nixos/home "${MNT}"/home
 
 log Format and mount ESP. Only one of them is used as /boot, you need to set up mirroring afterwards
 for i in ${DISK}; do
@@ -201,7 +208,7 @@ echo $line
 # tee <<EOF
 #   boot.initrd.luks.devices = {
 # EOF
-# for i in ${DISK}; do echo \"luks-rpool-"${i##*/}p2"\".device = \"${i}p2\"\; ; done
+# for i in ${DISK}; do echo \"luks-nixos-"${i##*/}p2"\".device = \"${i}p2\"\; ; done
 # tee <<EOF
 # };
 # EOF
