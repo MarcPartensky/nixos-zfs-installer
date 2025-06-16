@@ -171,11 +171,11 @@ log Creating encrypted root system container
 
 
 log Create root system container
-zfs create -o canmount=noauto -o mountpoint=legacy nixos/nix-store
+zfs create -o canmount=noauto -o mountpoint=legacy nixos/store
 zfs create -o canmount=noauto -o mountpoint=legacy nixos/root
 zfs create -o mountpoint=legacy nixos/home
 mount -o X-mount.mkdir -t zfs nixos/root "${MNT}"
-mount -o X-mount.mkdir -t zfs nixos/nix/store "${MNT}"/nix-store
+mount -o X-mount.mkdir -t zfs nixos/store "${MNT}"/nix/store
 mount -o X-mount.mkdir -t zfs nixos/home "${MNT}"/home
 
 log Format and mount ESP. Only one of them is used as /boot, you need to set up mirroring afterwards
