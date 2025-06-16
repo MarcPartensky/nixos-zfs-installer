@@ -54,16 +54,16 @@ in {
   config = mkIf (cfg.enable) (mkMerge [
     {
       zfs-root.fileSystems.datasets = {
-        # rpool/path/to/dataset = "/path/to/mountpoint"
-        "rpool/nixos/home" = mkDefault "/home";
-        "rpool/nixos/var/lib" = mkDefault "/var/lib";
-        "rpool/nixos/var/log" = mkDefault "/var/log";
+        # nixos/path/to/dataset = "/path/to/mountpoint"
+        "nixos/nixos/home" = mkDefault "/home";
+        "nixos/nixos/var/lib" = mkDefault "/var/lib";
+        "nixos/nixos/var/log" = mkDefault "/var/log";
         "bpool/nixos/root" = "/boot";
       };
     }
     (mkIf cfg.luks.enable {
       boot.initrd.luks.devices = mkMerge (map (diskName: {
-        "luks-rpool-${diskName}${cfg.partitionScheme.rootPool}" = {
+        "luks-nixos-${diskName}${cfg.partitionScheme.rootPool}" = {
           device = (cfg.devNodes + diskName + cfg.partitionScheme.rootPool);
           allowDiscards = true;
           bypassWorkqueues = true;
@@ -71,14 +71,14 @@ in {
       }) cfg.bootDevices);
     })
     (mkIf (!cfg.immutable.enable) {
-      zfs-root.fileSystems.datasets = { "rpool/nixos/root" = "/"; };
+      zfs-root.fileSystems.datasets = { "nixos/nixos/root" = "/"; };
     })
     (mkIf cfg.immutable.enable {
       zfs-root.fileSystems = {
         datasets = {
-          # rpool/path/to/dataset = "/path/to/mountpoint"
-          "rpool/nixos/empty" = "/";
-          "rpool/nixos/root" = "/oldroot";
+          # nixos/path/to/dataset = "/path/to/mountpoint"
+          "nixos/nixos/empty" = "/";
+          "nixos/nixos/root" = "/oldroot";
         };
         bindmounts = {
           # /bindmount/source = /bindmount/target
@@ -90,11 +90,11 @@ in {
         description = "Rollback root filesystem to an empty snapshot";
         unitConfig.DefaultDependencies = false;
         wantedBy = [ "zfs.target" ];
-        after = [ "zfs-import-rpool.service" ];
+        after = [ "zfs-import-nixos.service" ];
         before = [ "sysroot.mount" ];
         path = [ pkgs.zfs ];
         serviceConfig.Type = "oneshot";
-        script = "zfs rollback -r rpool/nixos/empty@start";
+        script = "zfs rollback -r nixos/nixos/empty@start";
       };
     })
     {
